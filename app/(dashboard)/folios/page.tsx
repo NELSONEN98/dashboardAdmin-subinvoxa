@@ -1,76 +1,123 @@
 "use client"
 
-import { useQuery } from "convex/react"
+import { useQuery, useConvexAuth } from "convex/react"
 import { api } from "@/convex/_generated/api"
 import { Header } from "@/components/header"
-import { useState } from "react"
+import { DataTable, Column } from "@/components/data-table"
 
-type Status = "active" | "depleted" | "expired" | undefined
+type FolioRow = {
+  _id: string
+  name: string
+  status: "active" | "depleted" | "expired"
+  total: number
+  used: number
+  expiresAt: number
+  account?: { name: string } | null
+}
+
+const STATUS = {
+  active:   { label: "Activo",   cls: "bg-emerald-100 text-emerald-700" },
+  depleted: { label: "Agotado",  cls: "bg-orange-100 text-orange-700" },
+  expired:  { label: "Vencido",  cls: "bg-red-100 text-red-700" },
+}
+
+const columns: Column<FolioRow>[] = [
+  {
+    key: "name",
+    label: "Paquete",
+    render: (row) => <span className="font-medium text-gray-900">{row.name}</span>,
+  },
+  {
+    key: "account",
+    label: "Cuenta",
+    render: (row) => <span className="text-gray-600">{row.account?.name ?? "—"}</span>,
+  },
+  {
+    key: "total",
+    label: "Total",
+    render: (row) => <span className="text-gray-700 font-medium">{row.total}</span>,
+  },
+  {
+    key: "used",
+    label: "Usados",
+    render: (row) => <span className="text-gray-600">{row.used}</span>,
+  },
+  {
+    key: "available",
+    label: "Disponibles",
+    render: (row) => (
+      <span className="font-semibold text-emerald-700">{row.total - row.used}</span>
+    ),
+  },
+  {
+    key: "progress",
+    label: "Uso",
+    render: (row) => {
+      const pct = row.total > 0 ? Math.round((row.used / row.total) * 100) : 0
+      return (
+        <div className="flex items-center gap-2 min-w-[100px]">
+          <div className="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${pct >= 100 ? "bg-red-400" : pct > 70 ? "bg-orange-400" : "bg-emerald-400"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
+        </div>
+      )
+    },
+  },
+  {
+    key: "expiresAt",
+    label: "Vence",
+    render: (row) => (
+      <span className="text-xs text-gray-500">
+        {new Date(row.expiresAt).toLocaleDateString("es-CO")}
+      </span>
+    ),
+  },
+  {
+    key: "status",
+    label: "Estado",
+    render: (row) => {
+      const s = STATUS[row.status]
+      return (
+        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${s.cls}`}>
+          {s.label}
+        </span>
+      )
+    },
+  },
+]
 
 export default function FoliosPage() {
-  const [status, setStatus] = useState<Status>(undefined)
-  const packages = useQuery(api.adminDashboard.listFolioPackages, { limit: 100, status })
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const packages = useQuery(api.adminDashboard.listFolioPackages, isAuthenticated ? { limit: 500 } : "skip")
 
   return (
     <>
       <Header title="Folios" />
-      <div className="flex-1 p-6 space-y-4">
-        {/* Filter */}
-        <div className="flex gap-2">
-          {(["all", "active", "depleted", "expired"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatus(s === "all" ? undefined : s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                (s === "all" && !status) || status === s
-                  ? "bg-gray-900 text-white"
-                  : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {s === "all" ? "Todos" : s}
-            </button>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Paquete</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cuenta</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Usados</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Disponibles</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Vence</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {!packages && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Cargando...</td></tr>
-              )}
-              {packages?.map((pkg) => (
-                <tr key={pkg._id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{pkg.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{pkg.account?.name ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-600">{pkg.total}</td>
-                  <td className="px-4 py-3 text-gray-600">{pkg.used}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-900">{pkg.total - pkg.used}</td>
-                  <td className="px-4 py-3 text-gray-600 text-xs">
-                    {new Date(pkg.expiresAt).toLocaleDateString("es-CO")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      pkg.status === "active" ? "bg-green-100 text-green-700" :
-                      pkg.status === "depleted" ? "bg-orange-100 text-orange-700" :
-                      "bg-red-100 text-red-700"
-                    }`}>{pkg.status}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div className="flex-1 p-8 bg-white">
+        <DataTable
+          data={packages as FolioRow[] | undefined}
+          columns={columns}
+          loading={isLoading || !isAuthenticated || packages === undefined}
+          searchPlaceholder="Buscar por paquete o cuenta..."
+          getSearchText={(row) => `${row.name} ${row.account?.name ?? ""}`}
+          filters={[
+            {
+              key: "status",
+              label: "Estado",
+              options: [
+                { value: "active",   label: "Activo" },
+                { value: "depleted", label: "Agotado" },
+                { value: "expired",  label: "Vencido" },
+              ],
+            },
+          ]}
+          pageSize={20}
+          emptyMessage="No se encontraron paquetes de folios"
+        />
       </div>
     </>
   )

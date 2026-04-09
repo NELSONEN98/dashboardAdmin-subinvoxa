@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <ClerkProvider>
       <html lang="es" className="h-full">
-        <body className={`${geist.className} h-full bg-gray-50 text-gray-900 antialiased`}>
+        <body className={`${geist.className} h-full bg-white text-gray-900 antialiased`}>
           <ConvexClientProvider>{children}</ConvexClientProvider>
         </body>
       </html>
